@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sequential Alphabet Balloon Burst Game</title>
+    <script src="https://cdn.jsdelivr.net/npm/phaser@3.55.2/dist/phaser.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #f9e9ba;
+        }
+        canvas {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+
+<script>
+    var config = {
+        type: Phaser.AUTO,
+        width: window.innerWidth,
+        height: window.innerHeight,
+        backgroundColor: '#f9e9ba',
+        physics: {
+            default: 'arcade',
+            arcade: {
+                debug: false
+            }
+        },
+        scale: {
+            mode: Phaser.Scale.FIT,
+            autoCenter: Phaser.Scale.CENTER_BOTH
+        },
+        scene: {
+            preload: preload,
+            create: create,
+            update: update
+        }
+    };
+
+    var game = new Phaser.Game(config);
+    var balloons = [];
+    var alphabetImages = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split(''); // Alphabet array
+    var currentIndex = 0; // Start from 'A'
+    var currentBalloon = null; // To track the current balloon
+
+    function preload() {
+        this.load.image('background', 'img/back.png'); // Background image
+        this.load.image('pump', 'img/pump.png'); // Pump image
+        this.load.image('cloud', 'img/cloud.png'); // Cloud image
+        this.load.image('dora', 'img/dora.png'); // Thread image
+
+        // Load balloon images (balloon1 to balloon10)
+        for (var i = 1; i <= 10; i++) {
+            this.load.image('balloon' + i, 'img/ballon' + i + '.png');
+        }
+
+        // Load alphabet images (A to Z)
+        alphabetImages.forEach(letter => {
+            this.load.image(letter, 'img/' + letter + '.png');
+        });
+    }
+
+    function create() {
+        // Set background and scale it to fit the screen
+        this.add.image(window.innerWidth / 2, window.innerHeight / 2, 'background')
+            .setDisplaySize(window.innerWidth, window.innerHeight);
+
+        // Add a single cloud at the lower-left corner and scale it
+        var cloud = this.add.image(1260, window.innerHeight - 35, 'cloud').setScale(0.6);
+
+        // Position the pump image to the right of the cloud
+        var pump = this.add.image(1260, window.innerHeight - 150, 'pump') // Adjusted position to be clear of the screen edge
+            .setScale(0.4).setInteractive();
+
+        pump.on('pointerdown', inflateCurrentBalloon, this);
+    }
+
+    function inflateCurrentBalloon() {
+        // If no current balloon, create a new one
+        if (!currentBalloon) {
+            createBalloon(this, alphabetImages[currentIndex]);
+        } else {
+            // Inflate the current balloon if it hasn't reached max size
+            if (currentBalloon.scale < 0.6) {
+                currentBalloon.setScale(currentBalloon.scale + 0.05); // Inflate balloon
+            } else if (!currentBalloon.isFlying) {
+                startFlying(currentBalloon);
+                currentBalloon.isFlying = true;
+            }
+        }
+    }
+
+    function createBalloon(scene, letter) {
+        // Randomly select a balloon image (balloon1 to balloon10)
+        var randomBalloon = Phaser.Math.Between(1, 10);
+        currentBalloon = scene.physics.add.sprite(Phaser.Math.Between(100, window.innerWidth - 200), Phaser.Math.Between(200, window.innerHeight - 300), 'balloon' + randomBalloon)
+            .setScale(0.3); // Initial small scale
+
+        // Add the letter image on top of the balloon, slightly above it
+        var letterImage = scene.add.image(currentBalloon.x, currentBalloon.y - 50, letter).setScale(0.2);
+        currentBalloon.letterImage = letterImage;
+
+        // Add thread (dora) connecting the balloon
+        var thread = scene.add.image(currentBalloon.x, currentBalloon.y + 25, 'dora') // Positioned at the bottom of the balloon
+            .setOrigin(0.5, 0); // Set origin to bottom center
+        currentBalloon.threadImage = thread;
+
+        // Balloon interactive burst action
+        currentBalloon.setInteractive();
+        currentBalloon.on('pointerdown', function () {
+            burstBalloon(currentBalloon, letterImage, thread, scene);
+        });
+    }
+
+    function startFlying(balloon) {
+        // Random velocity to make the balloon "fly"
+        balloon.setVelocity(Phaser.Math.Between(-80, 80), Phaser.Math.Between(-80, 80));
+    }
+
+    function burstBalloon(balloon, letterImage, thread, scene) {
+        if (balloon.isFlying) {
+            balloon.setTint(0xff0000); // Change balloon color to red
+            letterImage.setTint(0xff0000); // Change letter color to red
+            thread.setTint(0xff0000); // Change thread color to red
+
+            // Create burst effect
+            var burstEffect = scene.add.circle(balloon.x, balloon.y, 40, 0xff0000, 0.5);
+            scene.tweens.add({
+                targets: burstEffect,
+                scaleX: 1.5,
+                scaleY: 1.5,
+                alpha: 0,
+                duration: 300,
+                onComplete: function() {
+                    burstEffect.destroy();
+                    balloon.destroy();
+                    letterImage.destroy();
+                    thread.destroy(); // Destroy thread image
+                    currentBalloon = null; // Reset current balloon
+
+                    // Move to the next letter in the alphabet
+                    if (currentIndex < alphabetImages.length - 1) {
+                        currentIndex++;
+                    }
+                }
+            });
+        }
+    }
+
+    function update() {
+        // Ensure the letter stays on top of the balloon
+        if (currentBalloon) {
+            currentBalloon.letterImage.x = currentBalloon.x;
+            currentBalloon.letterImage.y = currentBalloon.y - 50; // Adjust the y position to keep it above the balloon
+            currentBalloon.threadImage.x = currentBalloon.x; // Keep thread centered on the balloon
+            currentBalloon.threadImage.y = currentBalloon.y + 25; // Position the thread below the balloon
+
+            // Keep the balloon within screen bounds
+            if (currentBalloon.x < 50 || currentBalloon.x > window.innerWidth - 50) {
+                currentBalloon.setVelocityX(-currentBalloon.body.velocity.x);
+            }
+            if (currentBalloon.y < 50 || currentBalloon.y > window.innerHeight - 50) {
+                currentBalloon.setVelocityY(-currentBalloon.body.velocity.y);
+            }
+        }
+    }
+
+    window.addEventListener('resize', () => {
+        game.scale.resize(window.innerWidth, window.innerHeight);
+    });
+</script>
+
+</body>
+</html>
